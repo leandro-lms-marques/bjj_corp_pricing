@@ -1,9 +1,13 @@
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
+import requests
+from dotenv import load_dotenv
+import os
 
-# Configurar a chave da API do OpenAI
-openai.api_key = 'YOUR_OPENAI_API_KEY'
+load_dotenv()
+
+
 
 def formatar_moeda(valor):
     """Formata um valor numérico para o formato de moeda brasileira."""
@@ -109,7 +113,7 @@ def exibir_sidebar():
     return custos_fixos, custos_variaveis, capacidade_maxima, lucro_desejado, impostos, transporte_alimentacao_por_dia, jornada_trabalho_diaria, fator_produtividade, resultado_mensal_esperado
 
 def gerar_resumo_e_sugestoes(servico, numero_alunos, preco_por_aluno_mes_ajustado, resultado_mensal_esperado):
-    """Gera um resumo e sugestões usando a API do OpenAI GPT-3."""
+    """Gera um resumo e sugestões usando a API da OpenAI."""
     resumo = f"""
     Análise de Precificação e Lucro - Resumo
 
@@ -125,18 +129,35 @@ def gerar_resumo_e_sugestoes(servico, numero_alunos, preco_por_aluno_mes_ajustad
     Preço Hora Alvo: {formatar_moeda(servico.calcular_preco_hora_alvo(resultado_mensal_esperado))}
     """
 
-    prompt = f"Analise o seguinte resumo financeiro e forneça sugestões para melhorar os resultados:\n\n{resumo}"
-    
-    response = openai.Completion.create(
-        engine="text-davinci-003",
-        prompt=prompt,
-        max_tokens=200,
-        n=1,
-        stop=None,
-        temperature=0.7,
-    )
+    prompt = f"""
+    Analise o seguinte resumo financeiro e forneça sugestões detalhadas para melhorar os resultados:
+    - Identifique pontos fortes e fracos.
+    - Sugira onde podemos cortar gastos.
+    - Indique onde podemos investir mais.
+    - Recomende ajustes nos preços ou na estrutura de custos.
+    - Com base nos dados listados, qual o percentual de lucro adequado para este tamanho de empresa cliente?
+    - Com base nos dados listados, qual o percentual máximo de desconto podemos aplicar?
 
-    sugestoes = response.choices[0].text.strip()
+    Resumo:
+    {resumo}
+    """
+    
+    try:
+        openai.api_key = os.getenv("OPENAI_API_KEY")
+        response = openai.Completion.create(
+            engine="gpt-3.5-turbo",
+            prompt=prompt,
+            max_tokens=500,
+            n=1,
+            stop=None,
+            temperature=0.7,
+        )
+        
+        sugestoes = response.choices[0].text.strip()
+        
+    except Exception as e:
+        sugestoes = f"Erro ao gerar sugestões: {e}"
+
     return resumo, sugestoes
 
 def exibir_cenario_empresa(i, custos_fixos, custos_variaveis, capacidade_maxima, lucro_desejado, impostos, transporte_alimentacao_por_dia, jornada_trabalho_diaria, fator_produtividade, resultado_mensal_esperado):
@@ -148,7 +169,7 @@ def exibir_cenario_empresa(i, custos_fixos, custos_variaveis, capacidade_maxima,
     
     servico = ServicoPrecificacao(custos_fixos, custos_variaveis, capacidade_maxima, lucro_desejado, impostos, transporte_alimentacao_por_dia, horas_trabalhadas_professor, aulas_por_aluno_mes, jornada_trabalho_diaria, fator_produtividade)
     
-    numero_alunos = st.number_input(f"Número de Alunos na Empresa {i+1}", 1, 1000, 500)
+    numero_alunos = st.number_input(f"Número de Alunos na Empresa {i+1}", 1, 10000, 500)
 
     preco_por_aluno_mes = servico.calcular_custos_variaveis_por_professor_mes() / servico.alunos_por_professor
     preco_por_aluno_mes *= (1 + lucro_desejado) / (1 - impostos)
