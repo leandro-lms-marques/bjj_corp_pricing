@@ -4,17 +4,16 @@ import matplotlib.pyplot as plt
 import requests
 from dotenv import load_dotenv
 import os
+from openai import OpenAI
 
 load_dotenv()
-
-
 
 def formatar_moeda(valor):
     """Formata um valor numérico para o formato de moeda brasileira."""
     return f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 class ServicoPrecificacao:
-    def __init__(self, custos_fixos, custos_variaveis, capacidade_maxima, lucro_desejado, impostos, transporte_alimentacao_por_dia, horas_trabalhadas_professor, aulas_por_aluno_mes, jornada_trabalho_diaria, fator_produtividade):
+    def __init__(self, custos_fixos, custos_variaveis, capacidade_maxima, lucro_desejado, impostos, transporte_alimentacao_por_dia, horas_trabalhadas_professor, aulas_por_aluno_mes, fator_produtividade):
         self.custos_fixos = custos_fixos
         self.custos_variaveis = custos_variaveis
         self.capacidade_maxima = capacidade_maxima
@@ -23,7 +22,6 @@ class ServicoPrecificacao:
         self.transporte_alimentacao_por_dia = transporte_alimentacao_por_dia
         self.horas_trabalhadas_professor = horas_trabalhadas_professor
         self.aulas_por_aluno_mes = aulas_por_aluno_mes
-        self.jornada_trabalho_diaria = jornada_trabalho_diaria
         self.fator_produtividade = fator_produtividade
         self.alunos_por_professor = self.calcular_alunos_por_professor()
         self.volume_horas_disponiveis = self.calcular_volume_horas_disponiveis()
@@ -34,7 +32,7 @@ class ServicoPrecificacao:
 
     def calcular_custos_variaveis_por_professor_mes(self):
         """Calcula os custos variáveis mensais por professor."""
-        dias_trabalhados = self.horas_trabalhadas_professor / self.jornada_trabalho_diaria
+        dias_trabalhados = self.horas_trabalhadas_professor / 30  # Assumindo 30 dias no mês
         return (self.custos_variaveis['Professor'] * self.horas_trabalhadas_professor + 
                 self.transporte_alimentacao_por_dia * dias_trabalhados + 
                 self.custos_variaveis.get('Outras Despesas', 0))
@@ -48,9 +46,10 @@ class ServicoPrecificacao:
 
     def calcular_numero_professores(self, numero_alunos):
         """Calcula o número de professores necessários."""
-        if self.alunos_por_professor == 0:
+        alunos_por_professor = self.calcular_alunos_por_professor()
+        if alunos_por_professor == 0:
             return 1  # Evita divisão por zero
-        return max(1, (numero_alunos + self.alunos_por_professor - 1) // self.alunos_por_professor)
+        return max(1, (numero_alunos + alunos_por_professor - 1) // alunos_por_professor)
 
     def calcular_custo_total(self, numero_alunos, preco_por_aluno_mes):
         """Calcula o custo total mensal."""
@@ -75,7 +74,7 @@ class ServicoPrecificacao:
 
     def calcular_ganho_professor_mes(self):
         """Calcula o ganho mensal por professor."""
-        dias_trabalhados = self.horas_trabalhadas_professor / self.jornada_trabalho_diaria
+        dias_trabalhados = self.horas_trabalhadas_professor / 30  # Assumindo 30 dias no mês
         return self.custos_variaveis['Professor'] * self.horas_trabalhadas_professor + self.transporte_alimentacao_por_dia * dias_trabalhados
 
     def calcular_volume_horas_disponiveis(self):
@@ -95,22 +94,21 @@ def exibir_sidebar():
     """Exibe a barra lateral com os parâmetros gerais."""
     st.sidebar.header("Parâmetros Gerais")
     custos_fixos = {
-        "Pessoal": st.sidebar.number_input("Custo Fixo - Pessoal", value=20000, step=1000),
+        "Pessoal": st.sidebar.number_input("Custo Fixo - Pessoal", value=10000, step=1000),
         "Aluguel": st.sidebar.number_input("Custo Fixo - Aluguel", value=10000, step=1000),
-        "Outras Despesas": st.sidebar.number_input("Custo Fixo - Outras Despesas", value=10000, step=1000)
+        "Outras Despesas": st.sidebar.number_input("Custo Fixo - Outras Despesas", value=8000, step=1000)
     }
-    custo_professor = st.sidebar.number_input("Custo Variável - Professor (por hora)", value=80, step=10)
+    custo_professor = st.sidebar.number_input("Custo Variável - Professor (por hora)", value=50, step=10)
     custo_outras_despesas = st.sidebar.number_input("Custo Variável - Outras Despesas", value=1000, step=100)
     custos_variaveis = {"Professor": custo_professor, "Outras Despesas": custo_outras_despesas}
     capacidade_maxima = st.sidebar.number_input("Capacidade Máxima por Aula", value=20, step=1)
-    lucro_desejado = st.sidebar.slider("Lucro Desejado (%)", 0, 100, 20) / 100
-    impostos = st.sidebar.slider("Impostos (%)", 0, 100, 15) / 100
+    lucro_desejado = st.sidebar.slider("Lucro Desejado (%)", 0, 100, 30) / 100
+    impostos = st.sidebar.slider("Impostos (%)", 0, 100, 10) / 100
     transporte_alimentacao_por_dia = st.sidebar.number_input("Transporte e Alimentação por dia", value=40, step=5)
-    jornada_trabalho_diaria = st.sidebar.number_input("Jornada de Trabalho Diária (horas)", value=8, step=1)
-    fator_produtividade = st.sidebar.slider("Fator de Produtividade (%)", 0, 100, 100) / 100
+    fator_produtividade = st.sidebar.slider("Fator de Produtividade (%)", 0, 100, 80) / 100
     resultado_mensal_esperado = st.sidebar.number_input("Resultado Mensal Esperado", value=10000, step=1000)
     
-    return custos_fixos, custos_variaveis, capacidade_maxima, lucro_desejado, impostos, transporte_alimentacao_por_dia, jornada_trabalho_diaria, fator_produtividade, resultado_mensal_esperado
+    return custos_fixos, custos_variaveis, capacidade_maxima, lucro_desejado, impostos, transporte_alimentacao_por_dia, fator_produtividade, resultado_mensal_esperado
 
 def gerar_resumo_e_sugestoes(servico, numero_alunos, preco_por_aluno_mes_ajustado, resultado_mensal_esperado):
     """Gera um resumo e sugestões usando a API da OpenAI."""
@@ -144,34 +142,37 @@ def gerar_resumo_e_sugestoes(servico, numero_alunos, preco_por_aluno_mes_ajustad
     
     try:
         openai.api_key = os.getenv("OPENAI_API_KEY")
-        response = openai.Completion.create(
-            engine="gpt-3.5-turbo",
-            prompt=prompt,
+        response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "Você é um assistente financeiro."},
+                {"role": "user", "content": prompt}
+            ],
             max_tokens=500,
             n=1,
             stop=None,
             temperature=0.7,
         )
         
-        sugestoes = response.choices[0].text.strip()
+        sugestoes = response.choices[0].message['content'].strip()
         
     except Exception as e:
         sugestoes = f"Erro ao gerar sugestões: {e}"
 
     return resumo, sugestoes
 
-def exibir_cenario_empresa(i, custos_fixos, custos_variaveis, capacidade_maxima, lucro_desejado, impostos, transporte_alimentacao_por_dia, jornada_trabalho_diaria, fator_produtividade, resultado_mensal_esperado):
+def exibir_cenario_empresa(i, custos_fixos, custos_variaveis, capacidade_maxima, lucro_desejado, impostos, transporte_alimentacao_por_dia, fator_produtividade, resultado_mensal_esperado):
     """Exibe a análise de cenário para uma empresa específica."""
     st.subheader(f"Empresa {i+1}")
     
     horas_trabalhadas_professor = st.number_input(f"Horas Trabalhadas por Professor por Mês - Empresa {i+1}", value=160, step=8)
     aulas_por_aluno_mes = st.number_input(f"Aulas por Aluno por Mês - Empresa {i+1}", value=8, step=1)
     
-    servico = ServicoPrecificacao(custos_fixos, custos_variaveis, capacidade_maxima, lucro_desejado, impostos, transporte_alimentacao_por_dia, horas_trabalhadas_professor, aulas_por_aluno_mes, jornada_trabalho_diaria, fator_produtividade)
+    servico = ServicoPrecificacao(custos_fixos, custos_variaveis, capacidade_maxima, lucro_desejado, impostos, transporte_alimentacao_por_dia, horas_trabalhadas_professor, aulas_por_aluno_mes, fator_produtividade)
     
     numero_alunos = st.number_input(f"Número de Alunos na Empresa {i+1}", 1, 10000, 500)
 
-    preco_por_aluno_mes = servico.calcular_custos_variaveis_por_professor_mes() / servico.alunos_por_professor
+    preco_por_aluno_mes = servico.calcular_custos_variaveis_por_professor_mes() / servico.calcular_alunos_por_professor()
     preco_por_aluno_mes *= (1 + lucro_desejado) / (1 - impostos)
     st.write(f"Preço calculado por Aluno/Mês: {formatar_moeda(preco_por_aluno_mes)}")
     
@@ -197,7 +198,7 @@ def exibir_cenario_empresa(i, custos_fixos, custos_variaveis, capacidade_maxima,
     col2.markdown(f"**Ganho por Professor/Mês**<br><span style='font-size:1.5em'>{formatar_moeda(ganho_professor_mes)}</span>", unsafe_allow_html=True)
     
     col3.markdown(f"**Preço por Aluno/Mês**<br><span style='font-size:1.5em'>{formatar_moeda(preco_por_aluno_mes_ajustado)}</span>", unsafe_allow_html=True)
-    col3.markdown(f"**Alunos por Professor**<br><span style='font-size:1.5em'>{servico.alunos_por_professor}</span>", unsafe_allow_html=True)
+    col3.markdown(f"**Alunos por Professor**<br><span style='font-size:1.5em'>{servico.calcular_alunos_por_professor()}</span>", unsafe_allow_html=True)
     col3.markdown(f"**Impostos Totais**<br><span style='font-size:1.5em'>{formatar_moeda(impostos_total)}</span>", unsafe_allow_html=True)
     col3.markdown(f"**Volume de Horas Disponíveis**<br><span style='font-size:1.5em'>{volume_horas_disponiveis}</span>", unsafe_allow_html=True)
     col3.markdown(f"**Preço Hora Alvo**<br><span style='font-size:1.5em'>{formatar_moeda(preco_hora_alvo)}</span>", unsafe_allow_html=True)
@@ -244,7 +245,7 @@ def main():
     st.sidebar.image(logo, use_column_width=True)
 
     # Exibir parâmetros gerais na barra lateral
-    custos_fixos, custos_variaveis, capacidade_maxima, lucro_desejado, impostos, transporte_alimentacao_por_dia, jornada_trabalho_diaria, fator_produtividade, resultado_mensal_esperado = exibir_sidebar()
+    custos_fixos, custos_variaveis, capacidade_maxima, lucro_desejado, impostos, transporte_alimentacao_por_dia, fator_produtividade, resultado_mensal_esperado = exibir_sidebar()
 
     # Análise de cenários
     st.header("Análise de Cenários por Empresa")
@@ -252,7 +253,7 @@ def main():
     num_empresas = st.number_input("Número de Empresas", 1, 10, 1)
     
     for i in range(num_empresas):
-        exibir_cenario_empresa(i, custos_fixos, custos_variaveis, capacidade_maxima, lucro_desejado, impostos, transporte_alimentacao_por_dia, jornada_trabalho_diaria, fator_produtividade, resultado_mensal_esperado)
+        exibir_cenario_empresa(i, custos_fixos, custos_variaveis, capacidade_maxima, lucro_desejado, impostos, transporte_alimentacao_por_dia, fator_produtividade, resultado_mensal_esperado)
 
 if __name__ == "__main__":
     main()
