@@ -5,3 +5,4 @@ openai
 transformers
 torch
 requests
+python-dotenv
